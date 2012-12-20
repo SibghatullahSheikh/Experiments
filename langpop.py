@@ -128,13 +128,17 @@ def query_today_data(db):
 
 
 class LanguagePopularity:
+    date_parser = strpdate2num("%Y%m%d")
+
     def __init__(self, name):
         self.name = name
-        self.dates = []
+        self.data = {}
+        self.matplotlib_dates = []
         self.popularity = []
 
     def add_record(self, day, popularity):
-        self.dates.append(day)
+        self.data[day] = popularity
+        self.matplotlib_dates.append(LanguagePopularity.date_parser(day))
         self.popularity.append(popularity)
 
     def has_been_popular(self, popularity_threshold):
@@ -147,11 +151,22 @@ class LanguagePopularity:
         return cmp(self.popularity[-1], other.popularity[-1])
 
 
+class TSV:
+    def __init__(self, path):
+        self.f = open(path, 'w')
+
+    def add_entry(self, entry):
+        self.f.write('\t'.join(entry) + '\n')
+
+    def __del__(self):
+        self.f.close()
+
 def plot_data(db):
-    date_parser = strpdate2num("%Y%m%d")
     langpop = {}
+    dates = []
     for data in db.find().sort("_id"):
-        day = date_parser(str(data.pop('_id')))
+        day = str(data.pop('_id'))
+        dates.append(day)
         for lang, popularity in data.iteritems():
             if lang not in langpop:
                 langpop[lang] = LanguagePopularity(lang)
@@ -162,10 +177,12 @@ def plot_data(db):
     fig = pyplot.figure()
     subplot = fig.add_subplot(111)
 
+    popular_languages = []
     for lang in languages:
         # Plot only languages that has been more popular than a given threshold
         if not lang.has_been_popular(PLOT_THRESHOLD): break
-        subplot.plot_date(lang.dates, lang.popularity, 'o-', label=lang.name)
+        popular_languages.append(lang)
+        subplot.plot_date(lang.matplotlib_dates, lang.popularity, 'o-', label=lang.name)
 
     pyplot.ylim([0, 110])
     subplot.legend(loc='upper left', fancybox=True)
@@ -173,10 +190,23 @@ def plot_data(db):
     print "Saving image"
     fig.autofmt_xdate()
 
-    ohloh_dir = join(DATA_DIR, 'ohloh')
+    ohloh_dir = join(WWW_STATIC, 'ohloh')
     if not exists(ohloh_dir):
         makedirs(ohloh_dir)
     fig.savefig(join(ohloh_dir, 'language_popularity.png'))
+
+    print "Generating TSV"
+    tsv = TSV(join(ohloh_dir, 'language_popularity.tsv'))
+
+    # title
+    tsv.add_entry(["date"] + [lang.name for lang in popular_languages])
+
+    # data
+    for day in dates:
+        entry = [day]
+        for lang in popular_languages:
+            entry.append(str(lang.data.get(day, 0)))
+        tsv.add_entry(entry)
 
 
 if __name__ == '__main__':
