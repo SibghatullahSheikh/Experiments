@@ -1,5 +1,6 @@
 # Default settings
-
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 465
 
 # Allow to override the default settings
 try:
